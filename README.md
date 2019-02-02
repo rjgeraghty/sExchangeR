@@ -33,7 +33,7 @@
 
 
 
-## proposed project phases
+## Proposed Project Phases
 
 
 - v00.1 nova super-fluoua
