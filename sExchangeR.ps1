@@ -1,17 +1,18 @@
-# sexChangeR.ps1 
-#
-# Simple Exchange Report
+# sExchangeR.ps1
+# [ sɛks ˈʧeɪnʤ ]
+# 
+# Simple Exchange Reporting 
+# (and monitoring)
 #
 
- 
-# source mailbox(es)
-#$ids="whobe@thismailbox.com"
-$ids=@(get-content ".\listofmailboxes.txt")
 
-#  G, M, K Bytes 
-$G = [int](1024*1024*1024)
-$M = [int](1024*1024)
-$K = [int](1024)
+# data source
+#$ids="email@ddress.com"
+$ids=@(get-content ".\listofaddresses.txt")
+
+# tally vars
+$dataTotalSum = 0;
+$dataProgressSum = 0;
 
 # report array
 $rep=@()
@@ -19,52 +20,37 @@ $rep=@()
 # do the thing
 $ids |% {
 
-# fields to display, start large, cull, less > more
+    # fields to display, start large, cull, less > more
     $rep +=	(Get-MigrationUser -identity $_ |` 
-		Get-MigrationUserStatistics |`
- 		select Identity,TotalQueuedDuration,TotalInProgressDuration,SyncedItemCount,`
-		EstimatedTotalTransferSize,BytesTransferred)
+		     Get-MigrationUserStatistics |`
+ 		     select Identity,TotalQueuedDuration,TotalInProgressDuration,SyncedItemCount,`
+
+             # @{Name="GB"; Expression={[math]::round($_.size/1GB, 2)}}
+
+		     EstimatedTotalTransferSize,BytesTransferred)
  
-# get bytes, apply logic, make functional
-    $dataTotal = ($rep[-1].EstimatedTotalTransferSize)
-    $dataInProgress = ($rep[-1].BytesTransferred) 
+    # parse byte counts
+    $dataTotal = (($rep[-1].EstimatedTotalTransferSize `
+                 -split("\(") -split("\)"))[1] `
+                 -split(" "))[0] -replace(",","")
 
-    $dataTotal = [int]($dataTotal -Split(" ")[0])[0].trim()
-    $dataInProgress = [int]($dataInProgress.BytesTransferred -Split(" ")[0])[0].trim()
+    $dataProgress = (($rep[-1].BytesTransferred `
+                 -split("\(") -split("\)"))[1] `
+                 -split(" "))[0] -replace(",","") 
 
-    $dataTotal = $dataTotal.ToString() -split(" ")
-    $dataInProgress = $dataInProgress.ToString() -split(" ")
+    # sum them
+    $dataTotalSum += $dataTotal
+    $dataProgressSum += $dataProgress
 
-# found no native handling for bandwitdh/units. weird.
-# just does G and M for now, K coming soon
-    if ($dataTotal[1] -eq "MB" ) { 
-        $dataTotal *= $M 
-    } elseif ( $dataTotal[1] -eq "GB") { 
-            $dataTotal *= $G 
-        } else { $dataTotal *= 1 }
-
-    if ( $dataInProgress[1] -eq "MB" ) { 
-            $dataInProgress *= $M   
-        } elseif ( $dataInProgress[1] -eq "GB") { 
-            $dataInProgress *= $G 
-        } else { $dataInProgress *= 1 }
-
-    if (($dataInProgress -eq 0) -or ($dataInProgress -eq 0)) {
-       #  $nada 
-        } else { 
-            [int]$dataProgressBytes = ($dataInProgress * $dataInProgress)
-        }
-    
-    if (($esd -eq 0) -or ($dataTotal -eq 0)) { 
-       # $nada 
-        } else { 
-            [int]$dataTotalBytes = ($dataTotal * $dataTotal)
-        }  
 }
 
 # table or whatver
 $rep | ft -autosize
 
-# summary, broken
-write-host (-join "Total: ", ($dataTotal/$G,2))," GB")
-write-host (-join "Progess: ",($dataInProgress/$G,2))," GB")
+# summary
+write-host (-join "Progess: ", [math]::round($dataProgressSum / 1GB), " GB")
+write-host (-join "Total: ", [math]::round($dataTotalSum / 1GB) ," GB")
+
+"Percent Complete: " + [math]::round($dataProgressSum / $dataTotalSum * 100, 2) +"%"
+
+
